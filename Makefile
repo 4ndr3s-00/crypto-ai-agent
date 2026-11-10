@@ -37,3 +37,15 @@ test:
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
+
+api:
+	.venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 8001 --reload
+
+frontend-install:
+	cd frontend && npm install
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build

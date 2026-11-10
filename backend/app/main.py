@@ -22,6 +22,7 @@ from backend.app.database.duckdb_client import get_duckdb_client
 from backend.app.database.queries import query_market_metrics, query_market_ohlcv
 from backend.app.models import (
     Candle,
+    ChatChart,
     ChatRequest,
     ChatResponse,
     HealthResponse,
@@ -205,3 +206,72 @@ def get_overview():
         except Exception as exc:
             logger.warning("No se pudo obtener ticker en vivo para %s: %s", sym, exc)
     return {"assets": overview_data, "count": len(overview_data), "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
+@app.get("/api/market/chart", response_model=ChatChart, tags=["Mercado"])
+def get_chart_spec(
+    symbol: str = Query(default="BTCUSDT", description="Símbolo del par (ej. BTCUSDT)"),
+    interval: str = Query(default="15m", description="Temporalidad (1m, 5m, 15m, 1h, 4h, 1d)"),
+    limit: int = Query(default=96, ge=1, le=1000, description="Cantidad de velas"),
+) -> ChatChart:
+    """
+    Retorna la especificación completa del gráfico financiero con soporte de velas japonesas y VWAP.
+    """
+    from backend.app.agent.chart_builder import build_candlestick_chart
+    from backend.app.database.binance_live import get_live_klines
+
+    res = query_market_ohlcv(symbol=symbol, interval=interval, limit=limit)
+    candles = res.get("candles", [])
+    source = res.get("source", "minio_parquet_historical")
+
+    if not candles:
+        live = get_live_klines(symbol=symbol, interval=interval, limit=limit)
+        candles = live.get("candles", [])
+        source = live.get("source", "binance_live")
+
+    metrics = query_market_metrics(symbol=symbol, window="24h")
+    vwap = metrics.get("vwap")
+
+    return build_candlestick_chart(
+        symbol=symbol,
+        interval=interval,
+        candles_data=candles,
+        vwap=vwap,
+        source=source,
+        cutoff_time=res.get("cutoff_time", ""),
+    )
+
+
+@app.get("/api/reports/{symbol}", tags=["Reportes"])
+def get_report(
+    symbol: str,
+    timeframe: str = Query(default="24h", description="Ventana de tiempo (24h, 7d, 30d)"),
+    depth: str = Query(default="detailed", description="Profundidad (summary, detailed)"),
+):
+    """
+    Genera un informe financiero cuantitativo completo para un activo.
+    """
+    from backend.app.agent.report_generator import generate_executive_report
+    return generate_executive_report(symbol=symbol, timeframe=timeframe, depth=depth)
+
+
+@app.get("/api/reports/{symbol}/export", tags=["Reportes"])
+def export_report_markdown(
+    symbol: str,
+    timeframe: str = Query(default="24h", description="Ventana de tiempo (24h, 7d, 30d)"),
+):
+    """
+    Descarga el reporte cuantitativo en formato Markdown (.md) limpio.
+    """
+    from fastapi.responses import Response
+    from backend.app.agent.report_generator import generate_executive_report
+
+    report = generate_executive_report(symbol=symbol, timeframe=timeframe)
+    filename = f"reporte_{symbol.upper()}_{timeframe}.md"
+
+    return Response(
+        content=report["markdown"],
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+

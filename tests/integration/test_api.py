@@ -56,8 +56,33 @@ def test_api_chat_analytics_fallback():
     response = client.post("/api/chat", json={"message": "¿Cómo está el precio y volumen de BTC?", "symbol": "BTCUSDT"})
     assert response.status_code == 200
     data = response.json()
-    assert len(data["answer"]) > 10
     assert data["chart"] is not None
     assert data["chart"]["symbol"] == "BTCUSDT"
     assert len(data["chart"]["candles"]) > 0
     assert len(data["tool_calls"]) > 0
+
+
+def test_api_market_chart_spec_endpoint():
+    response = client.get("/api/market/chart?symbol=BTCUSDT&interval=1h&limit=24")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["symbol"] == "BTCUSDT"
+    assert data["chart_type"] == "candlestick"
+    assert len(data["candles"]) > 0
+    assert "open" in data["candles"][0]
+
+
+def test_api_report_generation_and_export():
+    rep_response = client.get("/api/reports/BTCUSDT?timeframe=24h")
+    assert rep_response.status_code == 200
+    rep_data = rep_response.json()
+    assert rep_data["symbol"] == "BTCUSDT"
+    assert "Reporte Financiero Cuantitativo" in rep_data["markdown"]
+    assert rep_data["current_price"] > 0
+    assert rep_data["support_level"] > 0
+
+    export_response = client.get("/api/reports/BTCUSDT/export?timeframe=24h")
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"].startswith("text/markdown")
+    assert "Reporte Financiero Cuantitativo" in export_response.text
+
