@@ -1,0 +1,56 @@
+services:
+  # ----------------------------------------------------------------------------
+  # 1. MinIO: Lago de Datos S3 de Alta Durabilidad
+  # ----------------------------------------------------------------------------
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: crypto-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniopassword123}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9000"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - crypto-net
+
+  # ----------------------------------------------------------------------------
+  # 2. MinIO Init: Inicialización Idempotente de Buckets, Políticas y Usuarios
+  # ----------------------------------------------------------------------------
+  minio-init:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: crypto-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniopassword123}
+      MINIO_BUCKET_LAKE: ${MINIO_BUCKET_LAKE:-market-lake}
+      INGESTION_MINIO_USER: ${INGESTION_MINIO_USER:-ingestion_service}
+      INGESTION_MINIO_PASSWORD: ${INGESTION_MINIO_PASSWORD:-ingestion_secure_pass123}
+      API_MINIO_USER: ${API_MINIO_USER:-api_service}
+      API_MINIO_PASSWORD: ${API_MINIO_PASSWORD:-api_secure_pass123}
+    volumes:
+      - ./infra/minio/init-buckets.sh:/init-buckets.sh:ro
+      - ./infra/minio/policies:/policies:ro
+    entrypoint: ["/usr/bin/bash", "/init-buckets.sh"]
+    networks:
+      - crypto-net
+
+networks:
+  crypto-net:
+    driver: bridge
+
+volumes:
+  minio_data:
+    driver: local

@@ -1,0 +1,32 @@
+# Entornos virtuales
+.venv/
+env/
+venv/
+
+# Secretos y Entorno local
+.env
+*.local
+
+# Python y compilados
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Testing y Cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# IDE y Sistema Operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
