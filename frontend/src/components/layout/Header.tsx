@@ -72,14 +72,14 @@ export function Header({ onOpenReportModal }: HeaderProps) {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-base font-bold tracking-wider text-slate-100 font-mono-numbers">
-              ARCA
+              MARKET COPILOT
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50 font-mono-numbers">
               v1.0
             </span>
           </div>
           <p className="text-[11px] text-slate-400 font-mono-numbers hidden sm:block">
-            Copiloto Analítico de Mercados Financieros para Andrés
+            Copiloto Analítico & Inteligencia Cuantitativa de Mercados en Vivo
           </p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export function Header({ onOpenReportModal }: HeaderProps) {
         <div className="flex items-center gap-1.5">
           <div
             className={`w-2 h-2 rounded-full ${
-              health?.services.groq === "configured" || health?.services.groq_llama
+              health?.services.groq === "configured" || health?.services.groq_llama || health?.services.ollama_local
                 ? "bg-emerald-400"
                 : "bg-rose-500"
             }`}
@@ -123,7 +123,7 @@ export function Header({ onOpenReportModal }: HeaderProps) {
           <span className="text-slate-400">
             {health?.services.groq === "configured" || health?.services.groq_llama
               ? "Groq Llama-3.3"
-              : "Ollama Local"}
+              : "Ollama: llama3.2:3b"}
           </span>
         </div>
       </div>

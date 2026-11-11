@@ -17,6 +17,7 @@ from backend.app.database.binance_live import (
     ExchangeUnavailable,
     get_live_klines,
     get_live_ticker,
+    is_stale_cutoff,
 )
 from backend.app.database.queries import query_market_metrics, query_market_ohlcv
 
@@ -160,7 +161,8 @@ class ToolRegistry:
         symbol = args.symbol
         # 1. Intentar primero con DuckDB sobre MinIO
         duck_res = query_market_metrics(symbol, window=args.window)
-        if duck_res.get("current_price", 0.0) > 0:
+        cutoff = duck_res.get("cutoff_time", "")
+        if duck_res.get("current_price", 0.0) > 0 and not is_stale_cutoff(cutoff):
             p = duck_res
             summary = (
                 f"{symbol} · precio={_format_money(p['current_price'])} · "
@@ -181,11 +183,12 @@ class ToolRegistry:
                 ),
             )
 
-        # 2. Si no hay datos en MinIO, recurrir a Binance Live
+        # 2. Si no hay datos o están desactualizados en MinIO, usar Binance Live al segundo
         live = get_live_ticker(symbol)
         summary = (
-            f"{symbol} (Live) · precio={_format_money(live['current_price'])} · "
-            f"retorno={live['return_24h']:+.2f}% · VWAP={_format_money(live['vwap'])}"
+            f"{symbol} · precio={_format_money(live['current_price'])} · "
+            f"retorno={live['return_24h']:+.2f}% · VWAP={_format_money(live['vwap'])} · "
+            f"volumen={live['volume_24h']:,.2f}"
         )
         return ToolResult(
             name="query_metrics",
@@ -201,9 +204,10 @@ class ToolRegistry:
         symbol = args.symbol
         duck_res = query_market_ohlcv(symbol, interval=args.interval, limit=args.limit)
         candles = duck_res.get("candles", [])
+        cutoff = duck_res.get("cutoff_time", "")
 
-        if not candles:
-            # Fallback a Binance Live si el Data Lake aún no tiene particiones para ese par
+        if not candles or is_stale_cutoff(cutoff):
+            # Usar Binance Live si el Data Lake aún no tiene particiones o están desactualizadas
             live = get_live_klines(symbol, interval=args.interval, limit=args.limit)
             candles = live.get("candles", [])
             last = candles[-1] if candles else {}

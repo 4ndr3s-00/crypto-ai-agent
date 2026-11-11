@@ -8,10 +8,10 @@ from backend.app.agent.semantic_router import SemanticRouter
 def test_semantic_router_greetings():
     router = SemanticRouter()
     d1 = router.route("Hola")
-    d2 = router.route("Buenos días Arca")
+    d2 = router.route("Buenos días asistente")
 
     assert d1.kind == "greeting"
-    assert "Arca" in d1.response
+    assert "Market Copilot" in d1.response
     assert d2.kind == "greeting"
 
 
@@ -20,8 +20,7 @@ def test_semantic_router_identity():
     decision = router.route("¿Quién eres?")
 
     assert decision.kind == "identity"
-    assert "Arca" in decision.response
-    assert "Andrés" in decision.response
+    assert "Market Copilot" in decision.response
 
 
 def test_semantic_router_out_of_scope():

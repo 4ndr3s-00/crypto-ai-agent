@@ -5,6 +5,7 @@ import {
   HealthResponse,
   MarketOverview,
   MarketReport,
+  TechnicalSummary,
 } from "@/types";
 
 const API_BASE_URL =
@@ -60,6 +61,13 @@ export const apiClient = {
       cache: "no-store",
     });
     return handleResponse<ChatChart>(res);
+  },
+
+  async getTechnicalSummary(symbol = "BTCUSDT"): Promise<TechnicalSummary> {
+    const res = await fetch(`${API_BASE_URL}/api/market/technical-summary?symbol=${symbol}`, {
+      cache: "no-store",
+    });
+    return handleResponse<TechnicalSummary>(res);
   },
 
   async getMarketReport(symbol = "BTCUSDT"): Promise<MarketReport> {

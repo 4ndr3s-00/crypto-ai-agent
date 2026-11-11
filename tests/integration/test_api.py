@@ -41,10 +41,10 @@ def test_api_chat_greeting_router():
     """
     Verifica que saludos se resuelvan de inmediato por el router local sin error.
     """
-    response = client.post("/api/chat", json={"message": "Hola Arca"})
+    response = client.post("/api/chat", json={"message": "Hola"})
     assert response.status_code == 200
     data = response.json()
-    assert "Arca" in data["answer"]
+    assert "Market Copilot" in data["answer"]
     assert data["provenance"] == "ROUTER_GUARD"
     assert data["latency_ms"] < 100.0
 

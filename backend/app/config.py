@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     api_minio_password: str = Field(default="api_secure_pass123", alias="API_MINIO_PASSWORD")
 
     # Ingesta y Exchange
-    binance_api_base: str = Field(default="https://data-api.binance.vision", alias="BINANCE_API_BASE")
+    binance_api_base: str = Field(default="https://api.binance.com", alias="BINANCE_API_BASE")
     default_symbols: str = Field(default="BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT", alias="DEFAULT_SYMBOLS")
     market_cache_ttl_seconds: float = Field(default=5.0, alias="MARKET_CACHE_TTL_SECONDS")
     market_request_timeout_seconds: float = Field(default=10.0, alias="MARKET_REQUEST_TIMEOUT_SECONDS")
@@ -54,10 +54,10 @@ class Settings(BaseSettings):
     groq_model: str = Field(default="llama-3.3-70b-versatile", alias="GROQ_MODEL")
     groq_timeout_seconds: float = Field(default=15.0, alias="GROQ_TIMEOUT_SECONDS")
 
-    # Ollama Local Fallback
+    # Ollama Local (Modelo Activo)
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
-    ollama_model: str = Field(default="qwen2.5-coder:7b", alias="OLLAMA_MODEL")
-    ollama_embedding_model: str = Field(default="bge-m3", alias="OLLAMA_EMBEDDING_MODEL")
+    ollama_model: str = Field(default="llama3.2:3b", alias="OLLAMA_MODEL")
+    ollama_embedding_model: str = Field(default="all-minilm:latest", alias="OLLAMA_EMBEDDING_MODEL")
 
     # Router Semántico y Anti-Alucinación
     semantic_router_enabled: bool = Field(default=True, alias="SEMANTIC_ROUTER_ENABLED")

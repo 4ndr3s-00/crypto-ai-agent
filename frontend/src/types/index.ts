@@ -112,3 +112,32 @@ export interface ChatMessage {
   latency_ms?: number;
   sources?: SourceReference[];
 }
+
+export interface TechnicalSummary {
+  symbol: string;
+  current_price: number;
+  change_24h: number;
+  return_24h: number;
+  high_24h: number;
+  low_24h: number;
+  volume_24h: number;
+  vwap: number;
+  rsi_14: number;
+  sma_20: number;
+  ema_50: number;
+  technical_rating: string;
+  rating_score: number;
+  horizons: {
+    "24h": number;
+    "7d": number;
+    "30d": number;
+    "90d": number;
+    "1y": number;
+  };
+  high_52w: number;
+  low_52w: number;
+  source: string;
+  data_source: string;
+  timestamp: string;
+}
+

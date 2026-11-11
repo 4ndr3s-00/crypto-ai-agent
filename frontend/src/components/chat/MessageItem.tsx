@@ -70,14 +70,14 @@ export function MessageItem({ message }: MessageItemProps) {
               <div className="p-1 rounded-md bg-cyan-500/10 border border-cyan-500/30">
                 <Cpu className="w-3.5 h-3.5" />
               </div>
-              <span>Arca</span>
+              <span>Copiloto</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 text-slate-300 font-medium">
+            <div className="flex items-center gap-1.5 text-slate-300 font-medium font-mono-numbers">
               <div className="p-1 rounded-md bg-slate-800 border border-slate-700">
                 <User className="w-3.5 h-3.5 text-slate-400" />
               </div>
-              <span>Andrés</span>
+              <span>Trader</span>
             </div>
           )}
 

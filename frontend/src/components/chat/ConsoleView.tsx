@@ -17,7 +17,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
       id: "initial-welcome",
       role: "assistant",
       content:
-        "Sistemas en línea. Soy **Arca**, tu copiloto analítico de mercado.\n\nEstoy conectado en tiempo real al lakehouse en **MinIO** y a los feeds en vivo de **Binance**. DuckDB está listo para consultas OLAP sub-segundo con estricta verificación factual anti-alucinación.\n\n¿Qué activo o indicador deseas examinar hoy?",
+        "Sistemas en línea. Soy tu **Copiloto Analítico de Mercados**.\n\nEstoy conectado en tiempo real a los feeds en vivo de **Binance** y al data lakehouse en **MinIO S3**. DuckDB y el motor de IA local **Ollama (llama3.2:3b)** están activos para análisis cuantitativo, proyecciones técnicas y consultas de mercado con verificación factual estricta.\n\n¿Qué activo o indicador deseas examinar hoy?",
       timestamp: "Sistema Listo",
       provenance: "ROUTER_GUARD",
       latency_ms: 0,
@@ -78,7 +78,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
         onSelectSymbol?.(response.chart.symbol);
       }
     } catch (err: any) {
-      setError(err.message || "Error al conectar con el servidor de Arca");
+      setError(err.message || "Error al conectar con el servidor del backend");
       const errorMessage: ChatMessage = {
         id: "err-" + Date.now(),
         role: "assistant",
@@ -107,10 +107,10 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" />
           <span className="text-xs font-semibold text-slate-200 tracking-wider uppercase font-mono-numbers">
-            Arca Analytical Core
+            Market Copilot Core
           </span>
           <span className="text-[11px] text-slate-500 font-mono-numbers">
-            (DuckDB + MinIO S3 + Groq/Ollama)
+            (DuckDB + MinIO S3 + Ollama llama3.2:3b)
           </span>
         </div>
 
@@ -121,7 +121,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
               {
                 id: "initial-welcome",
                 role: "assistant",
-                content: "Sesión reiniciada. ¿Qué activo deseas analizar?",
+                content: "Sesión reiniciada. ¿Qué activo o métrica deseas analizar?",
                 timestamp: "Reinicio",
                 provenance: "ROUTER_GUARD",
               },
@@ -147,7 +147,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
         {loading && (
           <div className="flex items-center gap-3 p-4 bg-[#0d1322] border border-[#1e293b] rounded-xl text-xs font-mono-numbers text-cyan-400 animate-pulse">
             <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-            <span>Consultando DuckDB OLAP / Groq Llama-3.3-70b y auditando factualidad...</span>
+            <span>Consultando DuckDB OLAP / Ollama llama3.2:3b y verificando factualidad...</span>
           </div>
         )}
 
@@ -191,7 +191,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Pregunta a Arca sobre métricas, VWAP, gráficos o reportes..."
+            placeholder="Pregunta al Copiloto sobre métricas, VWAP, tendencias, RSI o gráficos..."
             disabled={loading}
             className="w-full bg-[#111a2e] border border-[#23355b] focus:border-cyan-500 text-slate-100 placeholder-slate-500 text-sm rounded-lg px-4 py-2.5 outline-none transition-colors font-mono-numbers disabled:opacity-50"
           />

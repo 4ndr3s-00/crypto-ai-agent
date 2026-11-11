@@ -53,23 +53,23 @@ IDENTITY_PATTERN = re.compile(
 )
 
 GREETING_RESPONSE = (
-    "Hola, Andrés. Soy Arca, tu copiloto analítico de mercado crypto. "
+    "Hola. Soy Market Copilot, tu asistente analítico de inteligencia de mercados cripto. "
     "Estoy conectado en tiempo real al lago de datos MinIO y a Binance para consultar "
-    "precios, series temporales OHLCV, VWAP y generar reportes financieros. ¿Qué activo deseas analizar hoy?"
+    "cotizaciones en vivo, series OHLCV, VWAP y generar diagnósticos técnicos. ¿Qué activo o indicador deseas evaluar?"
 )
 
 FAREWELL_RESPONSE = (
-    "Hasta luego, Andrés. Quedo en espera si requieres nuevos análisis, gráficos o reportes de mercado."
+    "Hasta pronto. Quedo a disposición cuando requieras nuevos diagnósticos técnicos, gráficos o reportes de mercado."
 )
 
 THANKS_RESPONSE = (
-    "A la orden, Andrés. Aquí estoy para cualquier consulta cuantitativa sobre el mercado."
+    "Con gusto. Aquí estaré para cualquier consulta cuantitativa sobre activos financieros."
 )
 
 IDENTITY_RESPONSE = (
-    "Soy Arca, el asistente personal de IA inteligente y analítico creado exclusivamente para Andrés. "
-    "Tengo conexión directa con MinIO S3 (Parquet) y la API en vivo de Binance, con un motor OLAP DuckDB "
-    "que me permite entregarte estadísticas de mercado y diagramas interactivos en milisegundos."
+    "Soy Market Copilot, el asistente analítico de inteligencia de mercado para esta plataforma. "
+    "Cuento con conexión directa al lakehouse MinIO S3 (Parquet) y feeds en vivo de Binance, asistido por un motor "
+    "OLAP DuckDB y modelos de lenguaje locales para entregarte análisis precisos y diagramas interactivos en segundos."
 )
 
 OUT_OF_SCOPE_RESPONSE = (

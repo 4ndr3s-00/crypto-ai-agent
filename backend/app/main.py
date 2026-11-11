@@ -17,7 +17,12 @@ from fastapi.responses import JSONResponse
 
 from backend.app.agent.llm_service import LLMService
 from backend.app.config import get_settings
-from backend.app.database.binance_live import get_live_ticker
+from backend.app.database.binance_live import (
+    get_live_klines,
+    get_live_ticker,
+    get_technical_summary,
+    is_stale_cutoff,
+)
 from backend.app.database.duckdb_client import get_duckdb_client
 from backend.app.database.queries import query_market_metrics, query_market_ohlcv
 from backend.app.models import (
@@ -119,9 +124,20 @@ def get_ohlcv(
     limit: int = Query(default=96, ge=1, le=1000, description="Cantidad de velas"),
 ) -> OHLCVResponse:
     """
-    Consulta series temporales OHLCV agregadas desde los archivos Parquet en MinIO.
+    Consulta series temporales OHLCV agregadas desde DuckDB/MinIO o Binance Live en tiempo real.
     """
     res = query_market_ohlcv(symbol=symbol, interval=interval, limit=limit)
+    cutoff = res.get("cutoff_time", "")
+    candles_data = res.get("candles", [])
+
+    if not candles_data or is_stale_cutoff(cutoff):
+        live = get_live_klines(symbol=symbol, interval=interval, limit=limit)
+        candles_data = live.get("candles", [])
+        res["source"] = live.get("source", "binance_live")
+        res["cutoff_time"] = live.get("cutoff_time", "")
+        res["count"] = len(candles_data)
+        res["latency_ms"] = 0.0
+
     candles = [
         Candle(
             timestamp=c["timestamp"],
@@ -131,12 +147,12 @@ def get_ohlcv(
             close=c["close"],
             volume=c["volume"],
         )
-        for c in res.get("candles", [])
+        for c in candles_data
     ]
     return OHLCVResponse(
         symbol=res["symbol"],
         interval=res["interval"],
-        count=res["count"],
+        count=len(candles),
         candles=candles,
         source=res["source"],
         cutoff_time=res["cutoff_time"],
@@ -152,9 +168,9 @@ def get_metrics(
     """
     Calcula métricas financieras (VWAP, retornos, volumen acumulado, extremos) en tiempo récord.
     """
-    # Intentar primero con DuckDB
     res = query_market_metrics(symbol=symbol, window=window)
-    if res.get("current_price", 0.0) > 0:
+    cutoff = res.get("cutoff_time", "")
+    if res.get("current_price", 0.0) > 0 and not is_stale_cutoff(cutoff):
         return MetricsResponse(
             symbol=res["symbol"],
             window=res["window"],
@@ -226,15 +242,20 @@ def get_chart_spec(
 
     res = query_market_ohlcv(symbol=symbol, interval=interval, limit=limit)
     candles = res.get("candles", [])
+    cutoff = res.get("cutoff_time", "")
     source = res.get("source", "minio_parquet_historical")
 
-    if not candles:
+    if not candles or is_stale_cutoff(cutoff):
         live = get_live_klines(symbol=symbol, interval=interval, limit=limit)
         candles = live.get("candles", [])
         source = live.get("source", "binance_live")
+        cutoff = live.get("cutoff_time", "")
 
     metrics = query_market_metrics(symbol=symbol, window="24h")
     vwap = metrics.get("vwap")
+    if not vwap or is_stale_cutoff(metrics.get("cutoff_time", "")):
+        live_ticker = get_live_ticker(symbol=symbol)
+        vwap = live_ticker.get("vwap")
 
     return build_candlestick_chart(
         symbol=symbol,
@@ -242,8 +263,18 @@ def get_chart_spec(
         candles_data=candles,
         vwap=vwap,
         source=source,
-        cutoff_time=res.get("cutoff_time", ""),
+        cutoff_time=cutoff,
     )
+
+
+@app.get("/api/market/technical-summary", tags=["Mercado"])
+def get_technical_summary_endpoint(
+    symbol: str = Query(default="BTCUSDT", description="Símbolo del par (ej. BTCUSDT)"),
+):
+    """
+    Retorna el resumen técnico completo estilo TradingView (RSI 14, SMA 20, EMA 50, termómetro y horizontes de retorno).
+    """
+    return get_technical_summary(symbol=symbol)
 
 
 @app.get("/api/reports/{symbol}", tags=["Reportes"])

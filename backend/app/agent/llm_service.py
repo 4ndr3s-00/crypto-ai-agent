@@ -221,30 +221,52 @@ class LLMService:
 
     async def _run_ollama(self, message: str, symbol: str, interval: str) -> Dict[str, Any]:
         """
-        Ejecuta la inferencia local con Ollama en caso de fallback.
+        Ejecuta la inferencia local con Ollama (llama3.2:3b u otro modelo activo).
+        Inyecta contexto empírico de mercado para que el modelo razone con base real y responda
+        a preguntas abiertas o analíticas con verdadero lenguaje natural.
         """
         url = f"{self.settings.ollama_base_url.rstrip('/')}/api/chat"
+
+        tr_metrics = self.tools.execute("query_metrics", {"symbol": symbol, "window": "24h"})
+        tr_ts = self.tools.execute("query_timeseries", {"symbol": symbol, "interval": interval, "limit": 48})
+        tool_results = [tr_metrics, tr_ts]
+
+        context_prompt = (
+            f"Contexto actual de mercado para {symbol} ({interval}):\n"
+            f"- Métricas 24h: {tr_metrics.summary}\n"
+            f"- Series recientes: {tr_ts.summary}\n\n"
+            f"Instrucción: Utiliza estos datos cuantitativos reales si la pregunta lo amerita. "
+            f"Si la consulta es conceptual, macroeconómica o imprevista, razona con claridad analítica en español. "
+            f"No inventes datos numéricos fuera de los provistos.\n\n"
+            f"Consulta del usuario: {message}"
+        )
+
         payload = {
             "model": self.settings.ollama_model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Consulta de Andrés: {message}\nActivo: {symbol}\nTemporalidad: {interval}"},
+                {"role": "user", "content": context_prompt},
             ],
             "stream": False,
+            "options": {
+                "temperature": 0.2,
+                "top_p": 0.9,
+            },
         }
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=35.0) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
             answer = data.get("message", {}).get("content", "").strip()
 
-        # Ejecutar métricas para garantizar respaldo factual
-        tr = self.tools.execute("query_metrics", {"symbol": symbol, "window": "24h"})
         return {
-            "answer": answer or tr.summary,
-            "sql": tr.sql,
-            "tool_results": [tr],
-            "tool_records": [ToolCallRecord(name=tr.name, arguments=tr.arguments, result_summary=tr.summary)],
+            "answer": answer or tr_metrics.summary,
+            "sql": tr_metrics.sql or tr_ts.sql,
+            "tool_results": tool_results,
+            "tool_records": [
+                ToolCallRecord(name=tr.name, arguments=tr.arguments, result_summary=tr.summary)
+                for tr in tool_results
+            ],
         }
 
     def _fallback_deterministic(self, message: str, symbol: str, interval: str) -> Dict[str, Any]:
@@ -255,10 +277,10 @@ class LLMService:
         tr_ts = self.tools.execute("query_timeseries", {"symbol": symbol, "interval": interval, "limit": 48})
 
         answer = (
-            f"Andrés, aquí tienes las estadísticas reales calculadas para {symbol}:\n\n"
+            f"Aquí tienes las estadísticas reales calculadas para {symbol}:\n\n"
             f"- {tr_metrics.summary}\n"
             f"- {tr_ts.summary}\n\n"
-            "El sistema ha verificado los datos directamente contra el lago MinIO S3 y el exchange en vivo."
+            f"El sistema ha verificado los datos directamente contra el lago MinIO S3 y el exchange en vivo."
         )
 
         return {
