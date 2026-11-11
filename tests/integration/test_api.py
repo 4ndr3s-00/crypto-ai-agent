@@ -86,3 +86,23 @@ def test_api_report_generation_and_export():
     assert export_response.headers["content-type"].startswith("text/markdown")
     assert "Reporte Financiero Cuantitativo" in export_response.text
 
+
+def test_api_chat_with_conversation_id_and_extra_fields():
+    """
+    Verifica que el endpoint acepte conversation_id y tolere campos adicionales sin fallar.
+    """
+    response = client.post(
+        "/api/chat",
+        json={
+            "message": "A que tendencia va el BTCUSDT",
+            "conversation_id": "session-123",
+            "extra_field": "test",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "answer" in data
+    assert "reply" in data
+    assert data["answer"] != ""
+
+

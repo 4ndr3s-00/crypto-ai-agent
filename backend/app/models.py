@@ -57,7 +57,7 @@ class SourceReference(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     message: str = Field(
         min_length=1,
@@ -68,6 +68,7 @@ class ChatRequest(BaseModel):
     symbol: str = Field(default="BTCUSDT", description="Símbolo sugerido por el contexto")
     interval: str = Field(default="15m", description="Temporalidad sugerida para el análisis")
     include_sql: bool = Field(default=True, description="Incluir sentencias analíticas ejecutadas")
+    conversation_id: Optional[str] = Field(default="default", description="Identificador de sesión o conversación")
 
 
 class ChatResponse(BaseModel):
