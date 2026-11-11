@@ -42,7 +42,19 @@ export function AssetBar({ selectedSymbol, onSelectSymbol }: AssetBarProps) {
 
         {tickers.map((t) => {
           const isSelected = t.symbol === selectedSymbol;
-          const isPositive = t.price_change_percent_24h >= 0;
+          const price =
+            typeof t.price === "number"
+              ? t.price
+              : typeof t.current_price === "number"
+              ? t.current_price
+              : 0;
+          const changePct =
+            typeof t.price_change_percent_24h === "number"
+              ? t.price_change_percent_24h
+              : typeof t.return_24h === "number"
+              ? t.return_24h
+              : 0;
+          const isPositive = changePct >= 0;
 
           return (
             <button
@@ -56,7 +68,9 @@ export function AssetBar({ selectedSymbol, onSelectSymbol }: AssetBarProps) {
               }`}
             >
               <span className="font-bold">{t.symbol}</span>
-              <span className="text-slate-100">${t.price.toLocaleString()}</span>
+              <span className="text-slate-100">
+                ${price > 0 ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "---"}
+              </span>
               <span
                 className={`flex items-center gap-0.5 font-medium ${
                   isPositive ? "text-emerald-400" : "text-rose-400"
@@ -68,7 +82,7 @@ export function AssetBar({ selectedSymbol, onSelectSymbol }: AssetBarProps) {
                   <TrendingDown className="w-3 h-3" />
                 )}
                 {isPositive ? "+" : ""}
-                {t.price_change_percent_24h.toFixed(2)}%
+                {changePct.toFixed(2)}%
               </span>
             </button>
           );

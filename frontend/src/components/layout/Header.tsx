@@ -87,14 +87,26 @@ export function Header({ onOpenReportModal }: HeaderProps) {
       {/* Center Services Health Matrix */}
       <div className="hidden md:flex items-center gap-4 px-3 py-1.5 rounded-lg bg-[#0d1322] border border-[#1e293b] text-xs font-mono-numbers">
         <div className="flex items-center gap-1.5">
-          <div className={`w-2 h-2 rounded-full ${health?.services.minio ? "bg-cyan-400" : "bg-rose-500"}`} />
+          <div
+            className={`w-2 h-2 rounded-full ${
+              health?.services.minio === "connected" || health?.services.minio === true
+                ? "bg-cyan-400"
+                : "bg-rose-500"
+            }`}
+          />
           <span className="text-slate-400">MinIO S3</span>
         </div>
 
         <div className="w-px h-3 bg-[#1e293b]" />
 
         <div className="flex items-center gap-1.5">
-          <div className={`w-2 h-2 rounded-full ${health?.services.duckdb ? "bg-amber-400" : "bg-rose-500"}`} />
+          <div
+            className={`w-2 h-2 rounded-full ${
+              health?.services.duckdb === "ready" || health?.services.duckdb === true
+                ? "bg-amber-400"
+                : "bg-rose-500"
+            }`}
+          />
           <span className="text-slate-400">DuckDB OLAP</span>
         </div>
 
@@ -103,11 +115,15 @@ export function Header({ onOpenReportModal }: HeaderProps) {
         <div className="flex items-center gap-1.5">
           <div
             className={`w-2 h-2 rounded-full ${
-              health?.services.groq_llama || health?.services.ollama_local ? "bg-emerald-400" : "bg-rose-500"
+              health?.services.groq === "configured" || health?.services.groq_llama
+                ? "bg-emerald-400"
+                : "bg-rose-500"
             }`}
           />
           <span className="text-slate-400">
-            {health?.services.groq_llama ? "Groq Llama-3.3" : "Ollama Local"}
+            {health?.services.groq === "configured" || health?.services.groq_llama
+              ? "Groq Llama-3.3"
+              : "Ollama Local"}
           </span>
         </div>
       </div>

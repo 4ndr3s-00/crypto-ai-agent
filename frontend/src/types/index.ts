@@ -42,7 +42,8 @@ export interface SourceReference {
 }
 
 export interface ChatResponse {
-  reply: string;
+  answer?: string;
+  reply?: string;
   chart?: ChatChart | null;
   tool_calls: ToolCallRecord[];
   sources: SourceReference[];
@@ -57,12 +58,18 @@ export interface ChatRequest {
 
 export interface LiveTicker {
   symbol: string;
-  price: number;
-  price_change_percent_24h: number;
-  high_24h: number;
-  low_24h: number;
-  volume_24h: number;
-  timestamp: string;
+  price?: number;
+  current_price?: number;
+  price_change_percent_24h?: number;
+  return_24h?: number;
+  open?: number;
+  high?: number;
+  high_24h?: number;
+  low?: number;
+  low_24h?: number;
+  volume_24h?: number;
+  timestamp?: string;
+  cutoff_time?: string;
 }
 
 export interface MarketOverview {
@@ -72,10 +79,12 @@ export interface MarketOverview {
 }
 
 export interface HealthServices {
-  minio: boolean;
-  duckdb: boolean;
-  groq_llama: boolean;
-  ollama_local: boolean;
+  api?: string;
+  minio?: string | boolean;
+  duckdb?: string | boolean;
+  groq?: string;
+  groq_llama?: boolean;
+  ollama_local?: boolean;
 }
 
 export interface HealthResponse {

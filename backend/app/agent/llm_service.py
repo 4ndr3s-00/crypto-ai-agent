@@ -48,6 +48,7 @@ class LLMService:
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
             return ChatResponse(
                 answer=decision.response,
+                reply=decision.response,
                 sql=None,
                 provenance="ROUTER_GUARD",
                 asset=request.symbol,
@@ -113,6 +114,7 @@ class LLMService:
 
         return ChatResponse(
             answer=final_answer,
+            reply=final_answer,
             sql=sql_executed if request.include_sql else None,
             provenance=provenance,  # type: ignore[arg-type]
             asset=request.symbol,

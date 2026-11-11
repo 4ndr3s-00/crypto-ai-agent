@@ -74,6 +74,7 @@ class ChatResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     answer: str = Field(description="Respuesta analítica en texto plano y profesional")
+    reply: Optional[str] = Field(default=None, description="Respuesta analítica duplicada para clientes frontend")
     sql: Optional[str] = Field(default=None, description="Consulta SQL ejecutada en DuckDB si aplica")
     provenance: Provenance = "DUCKDB_OLAP"
     asset: Optional[str] = None

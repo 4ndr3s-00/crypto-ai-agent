@@ -202,6 +202,10 @@ def get_overview():
     for sym in symbols:
         try:
             ticker = get_live_ticker(sym)
+            ticker["price"] = ticker.get("current_price", 0.0)
+            ticker["price_change_percent_24h"] = ticker.get("return_24h", 0.0)
+            ticker["high_24h"] = ticker.get("high", 0.0)
+            ticker["low_24h"] = ticker.get("low", 0.0)
             overview_data.append(ticker)
         except Exception as exc:
             logger.warning("No se pudo obtener ticker en vivo para %s: %s", sym, exc)

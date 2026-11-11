@@ -63,7 +63,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
       const assistantMessage: ChatMessage = {
         id: "arca-" + Date.now(),
         role: "assistant",
-        content: response.reply,
+        content: response.answer || response.reply || "Sin respuesta del agente.",
         timestamp: new Date().toLocaleTimeString(),
         chart: response.chart,
         provenance: response.provenance,
