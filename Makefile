@@ -1,7 +1,8 @@
-.PHONY: help up down ps logs test ingest venv clean
+.PHONY: help up down ps logs test ingest venv clean run api frontend-install frontend-dev frontend-build
 
 help:
 	@echo "Comandos disponibles en Crypto AI Agent Platform:"
+	@echo "  make run      - Activa todo de una (MinIO + Backend 8001 + Frontend 3000)"
 	@echo "  make up       - Levanta el lago de datos MinIO en segundo plano"
 	@echo "  make down     - Detiene los contenedores de MinIO"
 	@echo "  make ps       - Muestra el estado de los contenedores"
@@ -10,6 +11,9 @@ help:
 	@echo "  make test     - Ejecuta la suite de pruebas unitarias e integración"
 	@echo "  make venv     - Crea el virtualenv e instala dependencias con uv"
 	@echo "  make clean    - Limpia cachés de Python y temporales"
+
+run:
+	./start.sh
 
 venv:
 	uv venv .venv
