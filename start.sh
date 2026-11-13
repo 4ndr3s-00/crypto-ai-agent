@@ -36,7 +36,7 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-docker compose up -d minio
+docker compose up -d minio minio-init
 
 # Esperar a que MinIO esté respondiendo
 echo -e "Esperando a que MinIO S3 responda en el puerto 9000..."

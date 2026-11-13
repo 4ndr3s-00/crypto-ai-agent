@@ -19,7 +19,7 @@ import httpx
 
 logger = logging.getLogger("backend.binance_live")
 
-BINANCE_BASE = os.getenv("BINANCE_API_BASE", "https://api.binance.com")
+BINANCE_BASE = os.getenv("BINANCE_API_BASE", "https://data-api.binance.vision")
 CACHE_TTL = float(os.getenv("MARKET_CACHE_TTL_SECONDS", "5.0"))
 TIMEOUT = float(os.getenv("MARKET_REQUEST_TIMEOUT_SECONDS", "8.0"))
 
@@ -73,12 +73,18 @@ def _http_get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
     return _cache_set(cache_key, data)
 
 
-def get_live_ticker(symbol: str) -> Dict[str, Any]:
+def get_live_ticker(symbol: str, window: str = "24h") -> Dict[str, Any]:
     """
     Obtiene métricas de las últimas 24h para un par en vivo (precio actual, retorno, volumen, extremos).
     """
     clean_symbol = symbol.strip().upper()
-    data = _http_get("/api/v3/ticker/24hr", {"symbol": clean_symbol})
+    if window not in {"1h", "4h", "24h", "7d", "30d"}:
+        raise ValueError("Invalid window")
+    endpoint = "/api/v3/ticker/24hr" if window == "24h" else "/api/v3/ticker"
+    params = {"symbol": clean_symbol}
+    if window != "24h":
+        params["windowSize"] = window
+    data = _http_get(endpoint, params)
     if not isinstance(data, dict) or "lastPrice" not in data:
         raise ExchangeUnavailable(f"Ticker inválido devuelto por Binance para {clean_symbol}")
 
@@ -95,7 +101,7 @@ def get_live_ticker(symbol: str) -> Dict[str, Any]:
 
     return {
         "symbol": clean_symbol,
-        "window": "24h",
+        "window": window,
         "current_price": current_price,
         "open": open_price,
         "high": high_price,

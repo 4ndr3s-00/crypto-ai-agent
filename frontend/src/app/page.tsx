@@ -49,14 +49,15 @@ export default function DashboardPage() {
   const loadChart = useCallback(async (symbol: string, interval: string) => {
     setChartLoading(true);
     try {
-      const data = await apiClient.getMarketChart(symbol, interval, 96);
+      const data = await apiClient.getMarketChart(symbol, interval, ({ "24h": 96, "7d": 168, "30d": 180, "90d": 90, "1y": 365 }[selectedHorizon] || 96));
       setChartData(data);
     } catch (err) {
+      setChartData(null);
       console.error("Error al cargar gráfico:", err);
     } finally {
       setChartLoading(false);
     }
-  }, []);
+  }, [selectedHorizon]);
 
   // Fetch technical summary
   const loadTechnicalSummary = useCallback(async (symbol: string) => {
@@ -65,6 +66,7 @@ export default function DashboardPage() {
       const summary = await apiClient.getTechnicalSummary(symbol);
       setTechnicalSummary(summary);
     } catch (err) {
+      setTechnicalSummary(null);
       console.error("Error al cargar resumen técnico:", err);
     } finally {
       setSummaryLoading(false);
@@ -184,6 +186,8 @@ export default function DashboardPage() {
         {/* Right Workbench (Market Copilot Conversational Console) */}
         <section className="lg:col-span-5 flex flex-col h-[700px] lg:h-auto min-h-[550px]">
           <ConsoleView
+            symbol={selectedSymbol}
+            interval={selectedInterval}
             onOpenReport={(sym) => handleOpenReport(sym)}
             onSelectSymbol={(sym) => setSelectedSymbol(sym)}
           />

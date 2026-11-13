@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from backend.app.config import DISCLAIMER
-from backend.app.database.binance_live import get_live_ticker
+from backend.app.database.binance_live import get_live_ticker, get_live_klines, is_stale_cutoff
 from backend.app.database.queries import query_market_metrics, query_market_ohlcv
 
 logger = logging.getLogger("backend.report_generator")
@@ -34,13 +34,15 @@ def generate_executive_report(
 
     # 1. Obtener métricas
     metrics = query_market_metrics(clean_sym, window=timeframe)
-    if metrics.get("current_price", 0.0) <= 0:
-        metrics = get_live_ticker(clean_sym)
+    if metrics.get("current_price", 0.0) <= 0 or is_stale_cutoff(metrics.get("cutoff_time", "")):
+        metrics = get_live_ticker(clean_sym, window=timeframe)
 
     # 2. Obtener serie temporal para cálculo de niveles
-    limit = 168 if timeframe == "7d" else 720 if timeframe == "30d" else 24
+    limit = 168 if timeframe == "7d" else 30 if timeframe == "30d" else 24
     interval = "1d" if timeframe == "30d" else "1h"
     ts = query_market_ohlcv(clean_sym, interval=interval, limit=limit)
+    if not ts.get("candles") or is_stale_cutoff(ts.get("cutoff_time", "")):
+        ts = get_live_klines(clean_sym, interval=interval, limit=limit)
     candles = ts.get("candles", [])
 
     current_price = metrics.get("current_price", 0.0)

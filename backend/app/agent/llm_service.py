@@ -7,6 +7,9 @@ Gestiona el flujo completo: Router Semántico -> Function Calling -> Fact Check 
 from __future__ import annotations
 
 import json
+import asyncio
+from contextvars import ContextVar
+from collections import OrderedDict
 import logging
 import re
 import time
@@ -29,6 +32,9 @@ from backend.app.models import (
     ToolCallRecord,
 )
 
+_window = ContextVar("market_window", default="24h")
+_history = ContextVar("chat_history", default=())
+
 logger = logging.getLogger("backend.llm_service")
 
 
@@ -37,11 +43,44 @@ class LLMService:
         self.settings = settings or get_settings()
         self.router = router or SemanticRouter()
         self.tools = ToolRegistry()
+        self.conversations = OrderedDict()
+        self._conversation_locks = [asyncio.Lock() for _ in range(64)]
 
     async def answer(self, request: ChatRequest) -> ChatResponse:
+        # A bounded, expiring single-process store. Never share the legacy default ID.
+        key = request.conversation_id
+        if not key or key == "default":
+            return await self._answer(request)
+        async with self._conversation_locks[hash(key) % 64]:
+            now = time.monotonic()
+            for old in list(self.conversations):
+                if now - self.conversations[old][0] > 1800:
+                    del self.conversations[old]
+            turns = self.conversations.get(key, (now, []))[1]
+            token = _history.set(tuple(turns))
+            try:
+                response = await self._answer(request)
+            finally:
+                _history.reset(token)
+            turns = (turns + [{"role": "user", "content": request.message},
+                              {"role": "assistant", "content": response.answer[:8000]}])[-12:]
+            self.conversations[key] = (time.monotonic(), turns)
+            self.conversations.move_to_end(key)
+            while len(self.conversations) > 256:
+                self.conversations.popitem(last=False)
+            return response
+
+    async def _answer(self, request: ChatRequest) -> ChatResponse:
         started = time.perf_counter()
         message = request.message.strip()
+        aliases = {"bitcoin": "BTCUSDT", "btc": "BTCUSDT", "ethereum": "ETHUSDT", "eth": "ETHUSDT", "solana": "SOLUSDT", "sol": "SOLUSDT", "bnb": "BNBUSDT"}
+        mentioned = re.findall(r"\b(bitcoin|btc|ethereum|eth|solana|sol|bnb|BTCUSDT|ETHUSDT|SOLUSDT|BNBUSDT)\b", message, re.I)
+        if len(mentioned) == 1:
+            request = request.model_copy(update={"symbol": aliases.get(mentioned[0].lower(), mentioned[0].upper())})
 
+        periods = re.findall(r"\b(1h|4h|24h|7d|30d)\b", message)
+        window_token = periods[-1] if periods else "24h"
+        _window.set(window_token)
         # 1. Enrutamiento semántico local (latencia < 5ms)
         decision = self.router.route(message)
         if decision.kind != "analytics" and decision.response:
@@ -63,22 +102,25 @@ class LLMService:
             )
 
         # 2. Inferencia con Groq Cloud o Fallback
+        provider, model = "deterministic", None
         model_result: Optional[Dict[str, Any]] = None
         if self.settings.groq_api_key:
             try:
                 model_result = await self._run_groq(message, request.symbol, request.interval)
+                provider, model = "groq", self.settings.groq_model
             except Exception as exc:
                 logger.warning("Fallo en inferencia Groq (%s), recurriendo a Ollama/Fallback...", exc)
 
         if not model_result and self.settings.ollama_base_url:
             try:
                 model_result = await self._run_ollama(message, request.symbol, request.interval)
+                provider, model = "ollama", self.settings.ollama_model
             except Exception as exc:
                 logger.warning("Fallo en inferencia Ollama (%s), usando fallback determinista...", exc)
 
         # 3. Fallback determinista si los modelos fallan
         if not model_result:
-            model_result = self._fallback_deterministic(message, request.symbol, request.interval)
+            model_result = await asyncio.to_thread(self._fallback_deterministic, message, request.symbol, request.interval)
 
         tool_results: List[ToolResult] = model_result.get("tool_results", [])
         tool_records: List[ToolCallRecord] = model_result.get("tool_records", [])
@@ -86,11 +128,11 @@ class LLMService:
         sql_executed: Optional[str] = model_result.get("sql")
 
         # 4. Auditoría Factual y Anti-Alucinación
-        fallback_summary = next((tr.summary for tr in tool_results if tr.summary), "")
+        fallback_summary = "\n".join(tr.summary for tr in tool_results if tr.ok and tr.summary)
         final_answer = enforce_anti_hallucination(raw_answer, tool_results, fallback_summary)
 
         # 5. Construcción del Gráfico Financiero (Chart)
-        chart = self._build_chart(request.symbol, request.interval, tool_results)
+        chart = await asyncio.to_thread(self._build_chart, request.symbol, request.interval, tool_results)
 
         # Metadatos de linaje y corte
         cutoff_time = next(
@@ -113,6 +155,8 @@ class LLMService:
         latency_ms = round((time.perf_counter() - started) * 1000, 2)
 
         return ChatResponse(
+            provider=provider,
+            model=model,
             answer=final_answer,
             reply=final_answer,
             sql=sql_executed if request.include_sql else None,
@@ -140,6 +184,7 @@ class LLMService:
 
         messages: List[Dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
+            *_history.get(),
             {
                 "role": "user",
                 "content": f"Consulta de Andrés: {message}\nSímbolo sugerido: {symbol}\nTemporalidad sugerida: {interval}",
@@ -185,7 +230,7 @@ class LLMService:
                             except json.JSONDecodeError:
                                 fn_args = {}
 
-                        tr = self.tools.execute(fn_name, fn_args)
+                        tr = await asyncio.to_thread(self.tools.execute, fn_name, fn_args)
                         tool_results.append(tr)
                         tool_records.append(
                             ToolCallRecord(
@@ -227,13 +272,13 @@ class LLMService:
         """
         url = f"{self.settings.ollama_base_url.rstrip('/')}/api/chat"
 
-        tr_metrics = self.tools.execute("query_metrics", {"symbol": symbol, "window": "24h"})
-        tr_ts = self.tools.execute("query_timeseries", {"symbol": symbol, "interval": interval, "limit": 48})
+        tr_metrics = await asyncio.to_thread(self.tools.execute, "query_metrics", {"symbol": symbol, "window": _window.get()})
+        tr_ts = await asyncio.to_thread(self.tools.execute, "query_timeseries", {"symbol": symbol, "interval": interval, "limit": 48})
         tool_results = [tr_metrics, tr_ts]
 
         context_prompt = (
             f"Contexto actual de mercado para {symbol} ({interval}):\n"
-            f"- Métricas 24h: {tr_metrics.summary}\n"
+            f"- Métricas {_window.get()}: {tr_metrics.summary}\n"
             f"- Series recientes: {tr_ts.summary}\n\n"
             f"Instrucción: Utiliza estos datos cuantitativos reales si la pregunta lo amerita. "
             f"Si la consulta es conceptual, macroeconómica o imprevista, razona con claridad analítica en español. "
@@ -245,6 +290,7 @@ class LLMService:
             "model": self.settings.ollama_model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
+            *_history.get(),
                 {"role": "user", "content": context_prompt},
             ],
             "stream": False,
@@ -273,7 +319,7 @@ class LLMService:
         """
         Respaldo determinista garantizado: ejecuta herramientas reales sin LLM.
         """
-        tr_metrics = self.tools.execute("query_metrics", {"symbol": symbol, "window": "24h"})
+        tr_metrics = self.tools.execute("query_metrics", {"symbol": symbol, "window": _window.get()})
         tr_ts = self.tools.execute("query_timeseries", {"symbol": symbol, "interval": interval, "limit": 48})
 
         answer = (

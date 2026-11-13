@@ -63,41 +63,9 @@ llm_service = LLMService(settings=settings)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Sistema"])
-def health_check() -> HealthResponse:
-    """
-    Verifica el estado de salud de la API y sus dependencias (MinIO, DuckDB, Groq).
-    """
-    started = time.perf_counter()
-
-    # Chequeo DuckDB + MinIO S3
-    duck_status = "operational"
-    minio_status = "connected"
-    try:
-        duck = get_duckdb_client()
-        with duck.session() as conn:
-            conn.execute("SELECT 1;").fetchone()
-    except Exception as exc:
-        logger.warning("Fallo en healthcheck de DuckDB/MinIO: %s", exc)
-        duck_status = "degraded"
-        minio_status = "disconnected"
-
-    groq_status = "configured" if settings.groq_api_key else "fallback_mode"
-
-    latency_ms = round((time.perf_counter() - started) * 1000, 2)
-    return HealthResponse(
-        status="healthy" if minio_status == "connected" else "degraded",
-        application="crypto-ai-agent-backend",
-        version="1.0.0",
-        environment=settings.environment,
-        services=HealthServices(
-            api="operational",
-            minio=minio_status,
-            duckdb=duck_status,
-            groq=groq_status,
-        ),
-        latency_ms=latency_ms,
-        timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    )
+async def health_check() -> HealthResponse:
+    from backend.app.health import check_health
+    return await check_health(settings)
 
 
 @app.post("/api/chat", response_model=ChatResponse, tags=["Agente Arca"])
@@ -113,13 +81,13 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
         logger.error("Error no controlado en chat_endpoint: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error en el procesamiento del agente: {exc}",
+            detail="No se pudo procesar la consulta. Inténtalo de nuevo.",
         ) from exc
 
 
 @app.get("/api/market/ohlcv", response_model=OHLCVResponse, tags=["Mercado"])
 def get_ohlcv(
-    symbol: str = Query(default="BTCUSDT", description="Símbolo del par (ej. BTCUSDT)"),
+    symbol: str = Query(default="BTCUSDT", pattern=r"^[A-Z0-9]{2,20}$", description="Símbolo del par (ej. BTCUSDT)"),
     interval: str = Query(default="15m", description="Temporalidad (1m, 5m, 15m, 1h, 4h, 1d)"),
     limit: int = Query(default=96, ge=1, le=1000, description="Cantidad de velas"),
 ) -> OHLCVResponse:
@@ -162,7 +130,7 @@ def get_ohlcv(
 
 @app.get("/api/market/metrics", response_model=MetricsResponse, tags=["Mercado"])
 def get_metrics(
-    symbol: str = Query(default="BTCUSDT", description="Símbolo del par (ej. BTCUSDT)"),
+    symbol: str = Query(default="BTCUSDT", pattern=r"^[A-Z0-9]{2,20}$", description="Símbolo del par (ej. BTCUSDT)"),
     window: str = Query(default="24h", description="Ventana de cálculo (1h, 4h, 24h, 7d)"),
 ) -> MetricsResponse:
     """
@@ -189,7 +157,7 @@ def get_metrics(
         )
 
     # Fallback a Binance Live si el lago aún no tiene esa fecha
-    live = get_live_ticker(symbol=symbol)
+    live = get_live_ticker(symbol=symbol, window=window)
     return MetricsResponse(
         symbol=live["symbol"],
         window=live["window"],
@@ -230,7 +198,7 @@ def get_overview():
 
 @app.get("/api/market/chart", response_model=ChatChart, tags=["Mercado"])
 def get_chart_spec(
-    symbol: str = Query(default="BTCUSDT", description="Símbolo del par (ej. BTCUSDT)"),
+    symbol: str = Query(default="BTCUSDT", pattern=r"^[A-Z0-9]{2,20}$", description="Símbolo del par (ej. BTCUSDT)"),
     interval: str = Query(default="15m", description="Temporalidad (1m, 5m, 15m, 1h, 4h, 1d)"),
     limit: int = Query(default=96, ge=1, le=1000, description="Cantidad de velas"),
 ) -> ChatChart:
@@ -269,7 +237,7 @@ def get_chart_spec(
 
 @app.get("/api/market/technical-summary", tags=["Mercado"])
 def get_technical_summary_endpoint(
-    symbol: str = Query(default="BTCUSDT", description="Símbolo del par (ej. BTCUSDT)"),
+    symbol: str = Query(default="BTCUSDT", pattern=r"^[A-Z0-9]{2,20}$", description="Símbolo del par (ej. BTCUSDT)"),
 ):
     """
     Retorna el resumen técnico completo estilo TradingView (RSI 14, SMA 20, EMA 50, termómetro y horizontes de retorno).

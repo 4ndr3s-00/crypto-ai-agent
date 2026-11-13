@@ -42,6 +42,8 @@ export interface SourceReference {
 }
 
 export interface ChatResponse {
+  provider?: string;
+  model?: string | null;
   answer?: string;
   reply?: string;
   chart?: ChatChart | null;
@@ -79,6 +81,10 @@ export interface MarketOverview {
 }
 
 export interface HealthServices {
+  binance?: string;
+  ollama?: string;
+  ollama_model?: string | null;
+  groq_model?: string | null;
   api?: string;
   minio?: string | boolean;
   duckdb?: string | boolean;
@@ -103,6 +109,8 @@ export interface MarketReport {
 }
 
 export interface ChatMessage {
+  provider?: string;
+  model?: string | null;
   id: string;
   role: "user" | "assistant";
   content: string;

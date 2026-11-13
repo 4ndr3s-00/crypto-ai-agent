@@ -102,7 +102,7 @@ export function Header({ onOpenReportModal }: HeaderProps) {
         <div className="flex items-center gap-1.5">
           <div
             className={`w-2 h-2 rounded-full ${
-              health?.services.duckdb === "ready" || health?.services.duckdb === true
+              health?.services.duckdb === "operational" || health?.services.duckdb === true
                 ? "bg-amber-400"
                 : "bg-rose-500"
             }`}
@@ -115,19 +115,20 @@ export function Header({ onOpenReportModal }: HeaderProps) {
         <div className="flex items-center gap-1.5">
           <div
             className={`w-2 h-2 rounded-full ${
-              health?.services.groq === "configured" || health?.services.groq_llama || health?.services.ollama_local
+              health?.services.groq === "available" || health?.services.ollama === "available"
                 ? "bg-emerald-400"
                 : "bg-rose-500"
             }`}
           />
           <span className="text-slate-400">
-            {health?.services.groq === "configured" || health?.services.groq_llama
-              ? "Groq Llama-3.3"
-              : "Ollama: llama3.2:3b"}
+            {health?.services.groq === "available"
+              ? `Groq: ${health?.services.groq_model}`
+              : `Ollama: ${health?.services.ollama_model || "sin verificar"} (${health?.services.ollama || "desconocido"})`}
           </span>
         </div>
       </div>
 
+      <span className="text-xs text-slate-400">Binance: {health?.services.binance || "sin verificar"}</span>
       {/* Action & Status */}
       <div className="flex items-center gap-3">
         <button

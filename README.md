@@ -102,3 +102,13 @@ docker compose up -d
 set -x LINEAR_API_KEY "lin_api_tu_token_aqui"
 python3 sync_to_linear.py
 ```
+
+
+## Reliability updates
+
+- Chat responses expose `provider` and `model`; health checks report availability, not proof of successful inference.
+- `/health` independently probes Binance, the MinIO bucket, DuckDB, Ollama model inventory and Groq model inventory.
+- Conversation history is in memory per random browser conversation ID: 6 turns, 30 minute idle expiry, at most 256 sessions. Restarting the backend clears it; multi-worker deployments need shared storage and authenticated session ownership. Clearing chat creates a new ID.
+- Numeric guardrails check supported prices, percentages and base-asset amounts against matching asset/window evidence. Ambiguous comparisons fall back to tool summaries. This is a conservative rule-based check, not a guarantee of factual correctness for arbitrary prose.
+- Live metrics preserve the requested window through Binance rolling statistics. Legacy `return_24h`/`volume_24h` field names remain for API compatibility; inspect `window` for the actual period.
+- Offline regression checks: `python -m pytest tests/unit/test_reliability.py tests/unit/test_anti_hallucination.py tests/unit/test_semantic_router.py`.

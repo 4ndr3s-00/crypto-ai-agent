@@ -65,13 +65,15 @@ class ChatRequest(BaseModel):
         validation_alias=AliasChoices("message", "query"),
         description="Consulta del usuario en lenguaje natural",
     )
-    symbol: str = Field(default="BTCUSDT", description="Símbolo sugerido por el contexto")
+    symbol: str = Field(default="BTCUSDT", pattern=r"^[A-Z0-9]{2,20}$", description="Símbolo sugerido por el contexto")
     interval: str = Field(default="15m", description="Temporalidad sugerida para el análisis")
     include_sql: bool = Field(default=True, description="Incluir sentencias analíticas ejecutadas")
-    conversation_id: Optional[str] = Field(default="default", description="Identificador de sesión o conversación")
+    conversation_id: Optional[str] = Field(default=None, max_length=128, description="Identificador de sesión o conversación")
 
 
 class ChatResponse(BaseModel):
+    provider: str = "router"
+    model: Optional[str] = None
     model_config = ConfigDict(frozen=True)
 
     answer: str = Field(description="Respuesta analítica en texto plano y profesional")
@@ -123,6 +125,10 @@ class OHLCVResponse(BaseModel):
 
 
 class HealthServices(BaseModel):
+    binance: str = "unknown"
+    ollama: str = "unknown"
+    ollama_model: Optional[str] = None
+    groq_model: Optional[str] = None
     api: str
     minio: str
     duckdb: str

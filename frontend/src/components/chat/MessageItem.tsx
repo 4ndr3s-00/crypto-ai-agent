@@ -70,7 +70,7 @@ export function MessageItem({ message }: MessageItemProps) {
               <div className="p-1 rounded-md bg-cyan-500/10 border border-cyan-500/30">
                 <Cpu className="w-3.5 h-3.5" />
               </div>
-              <span>Copiloto</span>
+              <span>Copiloto {message.provider && `· ${message.model || message.provider}`}</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-slate-300 font-medium font-mono-numbers">

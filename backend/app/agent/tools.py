@@ -30,7 +30,7 @@ SUPPORTED_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT")
 
 class MetricsArgs(BaseModel):
     symbol: Literal["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"] = "BTCUSDT"
-    window: Literal["1h", "4h", "24h", "7d"] = "24h"
+    window: Literal["1h", "4h", "24h", "7d", "30d"] = "24h"
 
 
 class TimeseriesArgs(BaseModel):
@@ -184,7 +184,7 @@ class ToolRegistry:
             )
 
         # 2. Si no hay datos o están desactualizados en MinIO, usar Binance Live al segundo
-        live = get_live_ticker(symbol)
+        live = get_live_ticker(symbol, window=args.window)
         summary = (
             f"{symbol} · precio={_format_money(live['current_price'])} · "
             f"retorno={live['return_24h']:+.2f}% · VWAP={_format_money(live['vwap'])} · "
@@ -247,8 +247,8 @@ class ToolRegistry:
 
     def _report(self, args: ReportArgs) -> ToolResult:
         symbol = args.symbol
-        metrics = self._metrics(MetricsArgs(symbol=symbol, window="24h")).payload
-        timeseries = self._timeseries(TimeseriesArgs(symbol=symbol, interval="1h", limit=24)).payload
+        metrics = self._metrics(MetricsArgs(symbol=symbol, window=args.timeframe)).payload
+        timeseries = self._timeseries(TimeseriesArgs(symbol=symbol, interval="1h", limit={"24h": 24, "7d": 168, "30d": 720}[args.timeframe])).payload
         candles = timeseries.get("candles", [])
 
         highs = [c["high"] for c in candles] if candles else [metrics.get("high", 0.0)]

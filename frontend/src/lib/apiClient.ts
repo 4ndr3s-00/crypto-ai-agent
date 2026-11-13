@@ -83,7 +83,9 @@ export const apiClient = {
 
   async sendChatMessage(
     message: string,
-    conversationId = "default"
+    conversationId = "default",
+    symbol = "BTCUSDT",
+    interval = "15m"
   ): Promise<ChatResponse> {
     const res = await fetch(`${API_BASE_URL}/api/chat`, {
       method: "POST",
@@ -92,6 +94,8 @@ export const apiClient = {
       },
       body: JSON.stringify({
         message,
+        symbol,
+        interval,
         conversation_id: conversationId,
       }),
     });

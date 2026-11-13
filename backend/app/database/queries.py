@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
+import re
 from typing import Any, Dict, List, Optional
 
 from backend.app.database.duckdb_client import get_duckdb_client, MINIO_BUCKET
@@ -40,11 +41,15 @@ def query_market_ohlcv(
     """
     started = time.perf_counter()
     clean_symbol = symbol.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]{2,20}", clean_symbol):
+        raise ValueError("Símbolo inválido")
     parquet_glob = f"s3://{bucket}/historical/source=binance/symbol={clean_symbol}/*/*.parquet"
 
     duck = get_duckdb_client()
 
-    bucket_interval = INTERVAL_MAP.get(interval, "INTERVAL '15 minutes'")
+    if interval not in INTERVAL_MAP or not 1 <= limit <= 1000:
+        raise ValueError("Intervalo o límite inválido")
+    bucket_interval = INTERVAL_MAP[interval]
 
     query = f"""
     WITH raw_candles AS (
@@ -134,10 +139,16 @@ def query_market_metrics(
     """
     started = time.perf_counter()
     clean_symbol = symbol.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]{2,20}", clean_symbol):
+        raise ValueError("Símbolo inválido")
     parquet_glob = f"s3://{bucket}/historical/source=binance/symbol={clean_symbol}/*/*.parquet"
 
     duck = get_duckdb_client()
 
+    windows = {"1h": 1, "4h": 4, "24h": 24, "7d": 168, "30d": 720}
+    if window not in windows:
+        raise ValueError("Ventana invalida")
+    hours = windows[window]
     query = f"""
     WITH raw_candles AS (
         SELECT
@@ -160,6 +171,7 @@ def query_market_metrics(
             stddev(close) AS price_stddev,
             max(dt) AS max_time
         FROM raw_candles
+        WHERE dt >= current_timestamp - INTERVAL '{hours} hours'
     )
     SELECT
         round(current_price, 4),

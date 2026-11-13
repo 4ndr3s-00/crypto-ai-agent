@@ -62,35 +62,54 @@ def clean_text_artifacts(text: str) -> str:
 def audit_factual_consistency(
     text: str,
     tool_results: List[ToolResult],
-    tolerance_pct: float = 0.05,
+    tolerance_pct: float = 0.001,
 ) -> Tuple[bool, Optional[str]]:
     """
     Verifica que las cifras financieras citadas en el texto correspondan con el payload de las herramientas.
     Si se detecta un número ficticio o fuera de rango, retorna (False, motivo).
     """
-    if not tool_results:
-        # Si no hubo tools ejecutadas y el texto intenta citar cifras de mercado, es sospechoso
-        if re.search(r"\$\s*\d+", text):
-            return False, "Cita de precios sin ejecución previa de herramientas de mercado."
-        return True, None
+    valid = [t for t in tool_results if t.ok and t.payload]
+    aliases = {"bitcoin": "BTCUSDT", "btc": "BTCUSDT", "ethereum": "ETHUSDT", "eth": "ETHUSDT", "solana": "SOLUSDT", "sol": "SOLUSDT", "bnb": "BNBUSDT"}
+    numeric = r"[-+]?\d+(?:[.,]\d+)*"
+    def number(raw):
+        raw = raw.rstrip(".,")
+        if "," in raw and "." in raw:
+            return float(raw.replace(",", "") if raw.rfind(".") > raw.rfind(",") else raw.replace(".", "").replace(",", "."))
+        if "," in raw:
+            parts = raw.split(",")
+            raw = "".join(parts) if len(parts[-1]) == 3 else raw.replace(",", ".")
+        return float(raw)
 
-    authorized_numbers = extract_authorized_numbers(tool_results)
-    if not authorized_numbers:
-        return True, None
-
-    # Extraer precios con formato moneda en el texto ($68,450 o 68450)
-    cited_currency = re.findall(r"\$\s*([\d,]+(?:\.\d+)?)", text)
-    for raw_price in cited_currency:
-        try:
-            val = float(raw_price.replace(",", ""))
-            # Verificar si existe algún valor autorizado dentro de la tolerancia
-            matches = any(abs(val - auth) / max(auth, 1.0) <= tolerance_pct for auth in authorized_numbers)
-            if not matches and val > 10.0:  # Ignorar números triviales
-                logger.warning("Alucinación detectada: precio citado $%s no coincide con datos reales.", val)
-                return False, f"Precio citado ${val} no figura en los datos reales retornados por la herramienta."
-        except ValueError:
+    price_keys = {"current_price", "open", "high", "low", "close", "vwap", "support_level", "resistance_level"}
+    for sentence in re.split(r"[\n;]|(?<=[.!?])\s+", text):
+        claims = list(re.finditer(r"(?P<dollar>\$)\s*(?P<price>" + numeric + r")|(?P<value>" + numeric + r")\s*(?P<unit>%|USDT|USD|EUR|COP|BTC|ETH|SOL|BNB)", sentence, re.I))
+        if not claims:
             continue
-
+        symbols = {aliases.get(x.lower(), x.upper()) for x in re.findall(r"\b(?:BTCUSDT|ETHUSDT|SOLUSDT|BNBUSDT|bitcoin|ethereum|solana|btc|eth|sol|bnb)\b", sentence, re.I)}
+        periods = set(re.findall(r"\b(?:1h|4h|24h|7d|30d)\b", sentence))
+        periods.update({n + ("h" if u.lower().startswith("hora") else "d") for n, u in re.findall(r"(1|4|24|7|30)\s+(horas?|d[ií]as?)", sentence, re.I)})
+        candidates = [t for t in valid if (not symbols or (t.payload.get("symbol") or t.arguments.get("symbol")) in symbols) and (not periods or (t.payload.get("window") or t.payload.get("timeframe") or t.arguments.get("window")) in periods)]
+        if len(symbols) > 1:
+            return False, "Comparacion numerica ambigua; se requiere una afirmacion por activo."
+        for claim in claims:
+            unit = (claim.group("unit") or "USDT").upper()
+            value = number(claim.group("price") or claim.group("value"))
+            allowed = []
+            for tr in candidates:
+                payload = tr.payload
+                symbol = payload.get("symbol") or tr.arguments.get("symbol", "")
+                if unit == "%":
+                    allowed.extend(payload[k] for k in ("return_24h", "return_pct") if k in payload)
+                elif unit in {"USDT", "USD"}:
+                    allowed.extend(payload[k] for k in price_keys if k in payload)
+                    for candle in payload.get("candles", []):
+                        allowed.extend(candle[k] for k in price_keys if k in candle)
+                elif symbol == unit + "USDT":
+                    allowed.extend(payload[k] for k in ("volume", "volume_24h") if k in payload)
+            if not any(isinstance(v, (int, float)) and abs(value-v) <= max(0.005, abs(v)*tolerance_pct) for v in allowed):
+                return False, "La cifra no figura en los datos reales del activo, periodo y unidad."
+    if tool_results and not valid:
+        return False, "No hay datos verificados disponibles."
     return True, None
 
 
@@ -110,8 +129,10 @@ def enforce_anti_hallucination(
         logger.warning("Respuesta no factual interceptada (%s). Aplicando resumen determinista.", reason)
         if fallback_summary:
             cleaned = fallback_summary
-        elif tool_results and tool_results[0].summary:
+        elif tool_results and tool_results[0].ok and tool_results[0].summary:
             cleaned = tool_results[0].summary
+        else:
+            cleaned = "No hay datos verificados suficientes para responder esta consulta."
 
     # Garantizar descargo legal si no está presente
     if DISCLAIMER not in cleaned:

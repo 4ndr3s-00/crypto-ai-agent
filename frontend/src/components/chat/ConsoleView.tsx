@@ -7,17 +7,19 @@ import { apiClient } from "@/lib/apiClient";
 import { MessageItem } from "./MessageItem";
 
 interface ConsoleViewProps {
+  symbol: string;
+  interval: string;
   onOpenReport?: (symbol: string) => void;
   onSelectSymbol?: (symbol: string) => void;
 }
 
-export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) {
+export function ConsoleView({ onOpenReport, onSelectSymbol, symbol, interval }: ConsoleViewProps) {
+  const [conversationId, setConversationId] = useState(() => crypto.randomUUID());
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "initial-welcome",
       role: "assistant",
-      content:
-        "Sistemas en línea. Soy tu **Copiloto Analítico de Mercados**.\n\nEstoy conectado en tiempo real a los feeds en vivo de **Binance** y al data lakehouse en **MinIO S3**. DuckDB y el motor de IA local **Ollama (llama3.2:3b)** están activos para análisis cuantitativo, proyecciones técnicas y consultas de mercado con verificación factual estricta.\n\n¿Qué activo o indicador deseas examinar hoy?",
+      content: "Soy tu copiloto de mercados. Consulta el estado de los servicios en la cabecera; cada respuesta indica el proveedor utilizado.",
       timestamp: "Sistema Listo",
       provenance: "ROUTER_GUARD",
       latency_ms: 0,
@@ -58,9 +60,11 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
     setLoading(true);
 
     try {
-      const response: ChatResponse = await apiClient.sendChatMessage(query);
+      const response: ChatResponse = await apiClient.sendChatMessage(query, conversationId, symbol, interval);
 
       const assistantMessage: ChatMessage = {
+          provider: response.provider,
+          model: response.model,
         id: "arca-" + Date.now(),
         role: "assistant",
         content: response.answer || response.reply || "Sin respuesta del agente.",
@@ -117,6 +121,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol }: ConsoleViewProps) 
         <button
           type="button"
           onClick={() => {
+            setConversationId(crypto.randomUUID());
             setMessages([
               {
                 id: "initial-welcome",
