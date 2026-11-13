@@ -24,6 +24,7 @@ htmlcov/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+*.tsbuildinfo
 
 # IDE y Sistema Operativo
 .vscode/

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Header } from "@/components/layout/Header";
 import { AssetBar } from "@/components/layout/AssetBar";
@@ -45,33 +45,62 @@ export default function DashboardPage() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
 
+  // Referencias para evitar condiciones de carrera (respuestas lentas fuera de orden)
+  const chartReqIdRef = useRef(0);
+  const summaryReqIdRef = useRef(0);
+
   // Fetch chart data
   const loadChart = useCallback(async (symbol: string, interval: string) => {
+    const currentReq = ++chartReqIdRef.current;
     setChartLoading(true);
     try {
-      const data = await apiClient.getMarketChart(symbol, interval, ({ "24h": 96, "7d": 168, "30d": 180, "90d": 90, "1y": 365 }[selectedHorizon] || 96));
-      setChartData(data);
+      const limit = { "24h": 96, "7d": 168, "30d": 180, "90d": 90, "1y": 365 }[selectedHorizon] || 96;
+      const data = await apiClient.getMarketChart(symbol, interval, limit);
+      // Evitar race condition: solo actualizar si sigue siendo la petición más reciente y coincide el símbolo
+      if (currentReq === chartReqIdRef.current && data.symbol === symbol) {
+        setChartData(data);
+      }
     } catch (err) {
-      setChartData(null);
-      console.error("Error al cargar gráfico:", err);
+      if (currentReq === chartReqIdRef.current) {
+        setChartData(null);
+        console.error("Error al cargar gráfico:", err);
+      }
     } finally {
-      setChartLoading(false);
+      if (currentReq === chartReqIdRef.current) {
+        setChartLoading(false);
+      }
     }
   }, [selectedHorizon]);
 
   // Fetch technical summary
   const loadTechnicalSummary = useCallback(async (symbol: string) => {
+    const currentReq = ++summaryReqIdRef.current;
     setSummaryLoading(true);
     try {
       const summary = await apiClient.getTechnicalSummary(symbol);
-      setTechnicalSummary(summary);
+      // Evitar race condition: solo actualizar si sigue siendo la petición más reciente y coincide el símbolo
+      if (currentReq === summaryReqIdRef.current && summary.symbol === symbol) {
+        setTechnicalSummary(summary);
+      }
     } catch (err) {
-      setTechnicalSummary(null);
-      console.error("Error al cargar resumen técnico:", err);
+      if (currentReq === summaryReqIdRef.current) {
+        setTechnicalSummary(null);
+        console.error("Error al cargar resumen técnico:", err);
+      }
     } finally {
-      setSummaryLoading(false);
+      if (currentReq === summaryReqIdRef.current) {
+        setSummaryLoading(false);
+      }
     }
   }, []);
+
+  const handleSelectSymbol = (sym: string) => {
+    if (sym === selectedSymbol) return;
+    // Limpiar inmediatamente datos del activo anterior para evitar mostrarlos durante la carga o tras fallo
+    setChartData(null);
+    setTechnicalSummary(null);
+    setSelectedSymbol(sym);
+  };
 
   // Sync data when symbol or interval changes
   useEffect(() => {
@@ -114,6 +143,10 @@ export default function DashboardPage() {
     loadTechnicalSummary(selectedSymbol);
   };
 
+  // Prevenir que se renderice un gráfico o resumen del activo anterior si no coincide
+  const validChartData = chartData && chartData.symbol === selectedSymbol ? chartData : null;
+  const validSummary = technicalSummary && technicalSummary.symbol === selectedSymbol ? technicalSummary : null;
+
   return (
     <div className="min-h-screen flex flex-col bg-[#080c14] text-slate-100">
       {/* System Header */}
@@ -122,7 +155,7 @@ export default function DashboardPage() {
       {/* Real Market Asset Bar */}
       <AssetBar
         selectedSymbol={selectedSymbol}
-        onSelectSymbol={(sym) => setSelectedSymbol(sym)}
+        onSelectSymbol={handleSelectSymbol}
       />
 
       {/* Main Workspace Grid */}
@@ -131,7 +164,7 @@ export default function DashboardPage() {
         <section className="lg:col-span-7 flex flex-col gap-4">
           {/* TradingView Hero (Live Price, 24h Change Pill, Horizon Strip, Exchange Badges) */}
           <TradingViewHero
-            summary={technicalSummary}
+            summary={validSummary}
             selectedSymbol={selectedSymbol}
             selectedHorizon={selectedHorizon}
             onSelectHorizon={handleSelectHorizon}
@@ -139,9 +172,9 @@ export default function DashboardPage() {
 
           {/* Interactive TradingView Candlestick Chart */}
           <div className="relative">
-            {chartData ? (
+            {validChartData ? (
               <InteractiveChart
-                chartData={chartData}
+                chartData={validChartData}
                 height={460}
                 selectedInterval={selectedInterval}
                 onIntervalChange={(tf) => setSelectedInterval(tf)}
@@ -162,7 +195,7 @@ export default function DashboardPage() {
 
           {/* Technical Summary (Consensus Gauge, 24h & 52w Range Sliders, RSI, SMA, EMA) */}
           <TechnicalSummary
-            summary={technicalSummary}
+            summary={validSummary}
             loading={summaryLoading}
           />
 
@@ -189,7 +222,7 @@ export default function DashboardPage() {
             symbol={selectedSymbol}
             interval={selectedInterval}
             onOpenReport={(sym) => handleOpenReport(sym)}
-            onSelectSymbol={(sym) => setSelectedSymbol(sym)}
+            onSelectSymbol={handleSelectSymbol}
           />
         </section>
       </main>

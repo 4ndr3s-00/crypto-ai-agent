@@ -114,7 +114,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol, symbol, interval }: 
             Market Copilot Core
           </span>
           <span className="text-[11px] text-slate-500 font-mono-numbers">
-            (DuckDB + MinIO S3 + Ollama llama3.2:3b)
+            (DuckDB + MinIO S3 + IA / Respaldo Factual)
           </span>
         </div>
 
@@ -152,7 +152,7 @@ export function ConsoleView({ onOpenReport, onSelectSymbol, symbol, interval }: 
         {loading && (
           <div className="flex items-center gap-3 p-4 bg-[#0d1322] border border-[#1e293b] rounded-xl text-xs font-mono-numbers text-cyan-400 animate-pulse">
             <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-            <span>Consultando DuckDB OLAP / Ollama llama3.2:3b y verificando factualidad...</span>
+            <span>Consultando DuckDB OLAP / IA y auditando factualidad...</span>
           </div>
         )}
 

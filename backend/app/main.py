@@ -8,6 +8,7 @@ consultas analíticas DuckDB sobre MinIO y métricas en vivo.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import List, Optional
 
@@ -18,6 +19,7 @@ from fastapi.responses import JSONResponse
 from backend.app.agent.llm_service import LLMService
 from backend.app.config import get_settings
 from backend.app.database.binance_live import (
+    ExchangeUnavailable,
     get_live_klines,
     get_live_ticker,
     get_technical_summary,
@@ -94,17 +96,36 @@ def get_ohlcv(
     """
     Consulta series temporales OHLCV agregadas desde DuckDB/MinIO o Binance Live en tiempo real.
     """
-    res = query_market_ohlcv(symbol=symbol, interval=interval, limit=limit)
+    try:
+        res = query_market_ohlcv(symbol=symbol, interval=interval, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     cutoff = res.get("cutoff_time", "")
     candles_data = res.get("candles", [])
 
     if not candles_data or is_stale_cutoff(cutoff):
-        live = get_live_klines(symbol=symbol, interval=interval, limit=limit)
-        candles_data = live.get("candles", [])
-        res["source"] = live.get("source", "binance_live")
-        res["cutoff_time"] = live.get("cutoff_time", "")
-        res["count"] = len(candles_data)
-        res["latency_ms"] = 0.0
+        try:
+            live = get_live_klines(symbol=symbol, interval=interval, limit=limit)
+            candles_data = live.get("candles", [])
+            res["source"] = live.get("source", "binance_live")
+            res["data_source"] = live.get("data_source", "exchange_live")
+            res["cutoff_time"] = live.get("cutoff_time", "")
+            res["count"] = len(candles_data)
+            res["latency_ms"] = 0.0
+        except ExchangeUnavailable as exc:
+            logger.warning("Binance Live no disponible para ohlcv %s: %s", symbol, exc)
+            if not candles_data:
+                return OHLCVResponse(
+                    symbol=symbol.upper(),
+                    interval=interval,
+                    count=0,
+                    candles=[],
+                    source="binance_unavailable",
+                    cutoff_time="",
+                    latency_ms=res.get("latency_ms", 0.0),
+                    error=f"Exchange no disponible: {exc}",
+                )
 
     candles = [
         Candle(
@@ -131,12 +152,16 @@ def get_ohlcv(
 @app.get("/api/market/metrics", response_model=MetricsResponse, tags=["Mercado"])
 def get_metrics(
     symbol: str = Query(default="BTCUSDT", pattern=r"^[A-Z0-9]{2,20}$", description="Símbolo del par (ej. BTCUSDT)"),
-    window: str = Query(default="24h", description="Ventana de cálculo (1h, 4h, 24h, 7d)"),
+    window: str = Query(default="24h", description="Ventana de cálculo (1h, 4h, 24h, 7d, 30d)"),
 ) -> MetricsResponse:
     """
     Calcula métricas financieras (VWAP, retornos, volumen acumulado, extremos) en tiempo récord.
     """
-    res = query_market_metrics(symbol=symbol, window=window)
+    try:
+        res = query_market_metrics(symbol=symbol, window=window)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     cutoff = res.get("cutoff_time", "")
     if res.get("current_price", 0.0) > 0 and not is_stale_cutoff(cutoff):
         return MetricsResponse(
@@ -157,23 +182,43 @@ def get_metrics(
         )
 
     # Fallback a Binance Live si el lago aún no tiene esa fecha
-    live = get_live_ticker(symbol=symbol, window=window)
-    return MetricsResponse(
-        symbol=live["symbol"],
-        window=live["window"],
-        current_price=live["current_price"],
-        open=live["open"],
-        high=live["high"],
-        low=live["low"],
-        return_24h=live["return_24h"],
-        volume_24h=live["volume_24h"],
-        vwap=live["vwap"],
-        price_variance=live["price_variance"],
-        source=live["source"],
-        data_source=live["data_source"],
-        cutoff_time=live["cutoff_time"],
-        latency_ms=0.0,
-    )
+    try:
+        live = get_live_ticker(symbol=symbol, window=window)
+        return MetricsResponse(
+            symbol=live["symbol"],
+            window=live["window"],
+            current_price=live["current_price"],
+            open=live["open"],
+            high=live["high"],
+            low=live["low"],
+            return_24h=live["return_24h"],
+            volume_24h=live["volume_24h"],
+            vwap=live["vwap"],
+            price_variance=live["price_variance"],
+            source=live["source"],
+            data_source=live["data_source"],
+            cutoff_time=live["cutoff_time"],
+            latency_ms=0.0,
+        )
+    except ExchangeUnavailable as exc:
+        logger.warning("Binance Live no disponible para metrics %s: %s", symbol, exc)
+        return MetricsResponse(
+            symbol=symbol.upper(),
+            window=window,
+            current_price=res.get("current_price", 0.0),
+            open=res.get("open", 0.0),
+            high=res.get("high", 0.0),
+            low=res.get("low", 0.0),
+            return_24h=res.get("return_24h", 0.0),
+            volume_24h=res.get("volume_24h", 0.0),
+            vwap=res.get("vwap", 0.0),
+            price_variance=res.get("price_variance", 0.0),
+            source="binance_unavailable",
+            data_source="no_data_available",
+            cutoff_time=res.get("cutoff_time", ""),
+            latency_ms=res.get("latency_ms", 0.0),
+            error=f"Exchange no disponible: {exc}",
+        )
 
 
 @app.get("/api/market/overview", tags=["Mercado"])
@@ -208,22 +253,33 @@ def get_chart_spec(
     from backend.app.agent.chart_builder import build_candlestick_chart
     from backend.app.database.binance_live import get_live_klines
 
-    res = query_market_ohlcv(symbol=symbol, interval=interval, limit=limit)
+    try:
+        res = query_market_ohlcv(symbol=symbol, interval=interval, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     candles = res.get("candles", [])
     cutoff = res.get("cutoff_time", "")
     source = res.get("source", "minio_parquet_historical")
 
     if not candles or is_stale_cutoff(cutoff):
-        live = get_live_klines(symbol=symbol, interval=interval, limit=limit)
-        candles = live.get("candles", [])
-        source = live.get("source", "binance_live")
-        cutoff = live.get("cutoff_time", "")
+        try:
+            live = get_live_klines(symbol=symbol, interval=interval, limit=limit)
+            candles = live.get("candles", [])
+            source = live.get("source", "binance_live")
+            cutoff = live.get("cutoff_time", "")
+        except ExchangeUnavailable as exc:
+            logger.warning("Binance Live klines no disponible para chart %s: %s", symbol, exc)
 
-    metrics = query_market_metrics(symbol=symbol, window="24h")
-    vwap = metrics.get("vwap")
-    if not vwap or is_stale_cutoff(metrics.get("cutoff_time", "")):
-        live_ticker = get_live_ticker(symbol=symbol)
-        vwap = live_ticker.get("vwap")
+    vwap = None
+    try:
+        metrics = query_market_metrics(symbol=symbol, window="24h")
+        vwap = metrics.get("vwap")
+        if not vwap or is_stale_cutoff(metrics.get("cutoff_time", "")):
+            live_ticker = get_live_ticker(symbol=symbol)
+            vwap = live_ticker.get("vwap")
+    except Exception as exc:
+        logger.warning("No se pudo obtener VWAP para chart %s: %s", symbol, exc)
 
     return build_candlestick_chart(
         symbol=symbol,
@@ -242,7 +298,13 @@ def get_technical_summary_endpoint(
     """
     Retorna el resumen técnico completo estilo TradingView (RSI 14, SMA 20, EMA 50, termómetro y horizontes de retorno).
     """
-    return get_technical_summary(symbol=symbol)
+    try:
+        return get_technical_summary(symbol=symbol)
+    except ExchangeUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Servicio de exchange no disponible: {exc}",
+        ) from exc
 
 
 @app.get("/api/reports/{symbol}", tags=["Reportes"])
@@ -254,8 +316,21 @@ def get_report(
     """
     Genera un informe financiero cuantitativo completo para un activo.
     """
+    clean_sym = symbol.strip().upper()
+    if not re.fullmatch(r"^[A-Z0-9]{2,20}$", clean_sym):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Símbolo inválido")
+    if timeframe not in {"24h", "7d", "30d"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Timeframe inválido (use 24h, 7d o 30d)")
+
     from backend.app.agent.report_generator import generate_executive_report
-    return generate_executive_report(symbol=symbol, timeframe=timeframe, depth=depth)
+    try:
+        return generate_executive_report(symbol=clean_sym, timeframe=timeframe, depth=depth)
+    except Exception as exc:
+        logger.error("Error al generar reporte para %s: %s", clean_sym, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo generar el reporte: {exc}",
+        ) from exc
 
 
 @app.get("/api/reports/{symbol}/export", tags=["Reportes"])
@@ -269,8 +344,14 @@ def export_report_markdown(
     from fastapi.responses import Response
     from backend.app.agent.report_generator import generate_executive_report
 
-    report = generate_executive_report(symbol=symbol, timeframe=timeframe)
-    filename = f"reporte_{symbol.upper()}_{timeframe}.md"
+    clean_sym = symbol.strip().upper()
+    if not re.fullmatch(r"^[A-Z0-9]{2,20}$", clean_sym):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Símbolo inválido")
+    if timeframe not in {"24h", "7d", "30d"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Timeframe inválido (use 24h, 7d o 30d)")
+
+    report = generate_executive_report(symbol=clean_sym, timeframe=timeframe)
+    filename = f"reporte_{clean_sym}_{timeframe}.md"
 
     return Response(
         content=report["markdown"],

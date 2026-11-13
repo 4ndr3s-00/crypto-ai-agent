@@ -17,7 +17,7 @@ export function TradingViewHero({
   onSelectHorizon,
   selectedHorizon = "24h",
 }: TradingViewHeroProps) {
-  if (!summary) {
+  if (!summary || summary.symbol !== selectedSymbol) {
     return (
       <div className="w-full bg-[#0d1322] border border-[#1e293b] rounded-xl p-4 animate-pulse">
         <div className="h-6 w-48 bg-[#16223b] rounded mb-2"></div>

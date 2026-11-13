@@ -21,10 +21,12 @@ export function Header({ onOpenReportModal }: HeaderProps) {
         setHealth({
           status: "unhealthy",
           services: {
-            minio: false,
-            duckdb: false,
-            groq_llama: false,
-            ollama_local: false,
+            api: "unavailable",
+            minio: "disconnected",
+            duckdb: "unavailable",
+            binance: "unavailable",
+            ollama: "unavailable",
+            groq: "unavailable",
           },
           timestamp: new Date().toISOString(),
           version: "1.0.0",
@@ -115,20 +117,37 @@ export function Header({ onOpenReportModal }: HeaderProps) {
         <div className="flex items-center gap-1.5">
           <div
             className={`w-2 h-2 rounded-full ${
-              health?.services.groq === "available" || health?.services.ollama === "available"
+              health?.services.binance === "available"
                 ? "bg-emerald-400"
                 : "bg-rose-500"
+            }`}
+          />
+          <span className="text-slate-400">Binance Spot ({health?.services.binance || "sin verificar"})</span>
+        </div>
+
+        <div className="w-px h-3 bg-[#1e293b]" />
+
+        <div className="flex items-center gap-1.5">
+          <div
+            className={`w-2 h-2 rounded-full ${
+              health?.services.groq === "available" || health?.services.ollama === "available"
+                ? "bg-emerald-400"
+                : health?.services.ollama === "model_missing"
+                ? "bg-amber-400"
+                : "bg-amber-500"
             }`}
           />
           <span className="text-slate-400">
             {health?.services.groq === "available"
               ? `Groq: ${health?.services.groq_model}`
-              : `Ollama: ${health?.services.ollama_model || "sin verificar"} (${health?.services.ollama || "desconocido"})`}
+              : health?.services.ollama === "available"
+              ? `Ollama: ${health?.services.ollama_model}`
+              : health?.services.ollama === "model_missing"
+              ? `Ollama: modelo ausente`
+              : "Modo: Respaldo determinista"}
           </span>
         </div>
       </div>
-
-      <span className="text-xs text-slate-400">Binance: {health?.services.binance || "sin verificar"}</span>
       {/* Action & Status */}
       <div className="flex items-center gap-3">
         <button

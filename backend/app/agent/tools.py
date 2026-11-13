@@ -23,7 +23,7 @@ from backend.app.database.queries import query_market_metrics, query_market_ohlc
 
 logger = logging.getLogger("backend.tools")
 
-WINDOWS = ("1h", "4h", "24h", "7d")
+WINDOWS = ("1h", "4h", "24h", "7d", "30d")
 INTERVALS = ("1m", "5m", "15m", "1h", "4h", "1d")
 SUPPORTED_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT")
 

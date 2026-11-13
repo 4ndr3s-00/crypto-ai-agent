@@ -31,3 +31,14 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ingestion*", "backend*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: pruebas unitarias aisladas sin dependencias externas",
+    "offline: pruebas ejecutables sin red ni servicios externos",
+    "external: pruebas que requieren conexión de red o servicios externos",
+    "integration: pruebas de integración con servicios externos (MinIO, Binance)",
+]
+testpaths = ["tests"]

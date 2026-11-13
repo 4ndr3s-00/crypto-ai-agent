@@ -1,26 +1,31 @@
-.PHONY: help up down ps logs test ingest venv clean run api frontend-install frontend-dev frontend-build
+.PHONY: help up down ps logs test test-offline ingest venv clean run api frontend-install frontend-dev frontend-build frontend-lint
 
 help:
 	@echo "Comandos disponibles en Crypto AI Agent Platform:"
-	@echo "  make run      - Activa todo de una (MinIO + Backend 8001 + Frontend 3000)"
-	@echo "  make up       - Levanta el lago de datos MinIO en segundo plano"
-	@echo "  make down     - Detiene los contenedores de MinIO"
-	@echo "  make ps       - Muestra el estado de los contenedores"
-	@echo "  make logs     - Muestra los logs de MinIO"
-	@echo "  make ingest   - Ejecuta catch-up histórico desde Binance hacia MinIO"
-	@echo "  make test     - Ejecuta la suite de pruebas unitarias e integración"
-	@echo "  make venv     - Crea el virtualenv e instala dependencias con uv"
-	@echo "  make clean    - Limpia cachés de Python y temporales"
+	@echo "  make run          - Activa todo de una (MinIO + Backend 8001 + Frontend 3000)"
+	@echo "  make up           - Levanta el lago de datos MinIO en segundo plano"
+	@echo "  make down         - Detiene los contenedores de MinIO"
+	@echo "  make ps           - Muestra el estado de los contenedores"
+	@echo "  make logs         - Muestra los logs de MinIO"
+	@echo "  make ingest       - Ejecuta catch-up histórico desde Binance hacia MinIO"
+	@echo "  make test         - Ejecuta la suite completa de pruebas unitarias e integración"
+	@echo "  make test-offline - Ejecuta únicamente las pruebas offline sin servicios externos"
+	@echo "  make venv         - Crea el virtualenv e instala dependencias (uv o pip)"
+	@echo "  make clean        - Limpia cachés de Python y temporales"
+	@echo "  make frontend-lint- Ejecuta el linter ESLint en el frontend"
 
 run:
 	./start.sh
 
 venv:
-	uv venv .venv
-	uv pip install -e ".[dev]"
+	@if command -v uv >/dev/null 2>&1; then \
+		uv venv .venv && uv pip install -e ".[dev]"; \
+	else \
+		python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -e ".[dev]"; \
+	fi
 
 up:
-	docker compose up -d
+	docker compose up -d minio minio-init
 	@echo "MinIO listo en http://localhost:9000 (Consola: http://localhost:9001)"
 
 down:
@@ -38,6 +43,9 @@ ingest:
 test:
 	.venv/bin/pytest tests/ -v
 
+test-offline:
+	.venv/bin/pytest -m offline -v
+
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
@@ -53,3 +61,6 @@ frontend-dev:
 
 frontend-build:
 	cd frontend && npm run build
+
+frontend-lint:
+	cd frontend && npm run lint
